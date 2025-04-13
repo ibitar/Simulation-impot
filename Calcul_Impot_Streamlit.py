@@ -46,9 +46,9 @@ def calcul_impot(revenu_salarial, chiffre_affaire_autoentrepreneur, nombre_parts
     impot_total = impot_quotient * nombre_parts
 
     if est_couple:
-        decote = max(0, 1444 - 0.4525 * impot_total)
+        decote = max(0, 1470 - 0.4525 * impot_total)
     else:
-        decote = max(0, 873 - 0.4525 * impot_total)
+        decote = max(0, 889 - 0.4525 * impot_total)
 
     impot_apres_decote = max(0, impot_total - decote)
     reduction_frais_garde = frais_garde * 0.50
