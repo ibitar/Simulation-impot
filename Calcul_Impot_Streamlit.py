@@ -81,6 +81,20 @@ def calcul_impot(revenu_salarial, chiffre_affaire_autoentrepreneur, nombre_parts
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Choisissez une simulation :", ["Simulation 1", "Simulation 2", "Comparaison"])
 
+# Informations contextuelles sur les tranches et la décote (année 2025)
+st.sidebar.markdown("### Informations fiscales 2025")
+
+st.sidebar.markdown("**Tranches d'imposition (revenu net imposable annuel par part)** :")
+st.sidebar.markdown("- Jusqu'à 11 497 € : 0%")
+st.sidebar.markdown("- 11 497 € à 29 315 € : 11%")
+st.sidebar.markdown("- 29 315 € à 83 823 € : 30%")
+st.sidebar.markdown("- 83 823 € à 180 294 € : 41%")
+st.sidebar.markdown("- Plus de 180 294 € : 45%")
+
+st.sidebar.markdown("**Décote 2025** :")
+st.sidebar.markdown("- **Personne seule** : si impôt < 1 965 €, alors décote = max(0, 889 - 45,25% de l’impôt)")
+st.sidebar.markdown("- **Couple marié/pacsé** : si impôt < 3 249 €, alors décote = max(0, 1 470 - 45,25% de l’impôt)")
+
 # Fonction pour afficher une page de simulation
 def simulation_page(titre, key):
     st.title(titre)
