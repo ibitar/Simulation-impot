@@ -2,12 +2,25 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- Initialisation du state pour stocker le résultat de la simulation ---
+# --- Initialisation du state pour stocker le résultat et les inputs ---
+default_inputs = {
+    "revenu_salarial": 30000.0,
+    "ca_auto": 0.0,
+    "parts": 1.0,
+    "aide": 0.0,
+    "garde": 0.0,
+    "red": False,
+    "couple": False
+}
+
+for key, val in default_inputs.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
+
 if "simulation" not in st.session_state:
     st.session_state["simulation"] = None
 
-# --- Fonction de calcul d'impôt (inchangée) ---
-# Fonction de calcul d'impôt
+# --- Fonction de calcul d'impôt ---
 def calcul_impot(revenu_salarial, chiffre_affaire_autoentrepreneur,
                  nombre_parts, reduction_forfaitaire=False,
                  aide_familiale=0, frais_garde=0, est_couple=False):
@@ -80,13 +93,19 @@ def calcul_impot(revenu_salarial, chiffre_affaire_autoentrepreneur,
         "details_tranches": details_tranches
     }
 
-# --- Fonction pour la page Simulation ---
+# --- Page Simulation ---
 def simulation_page():
     st.title("Simulation d'Impôt")
 
-    # Inputs
-    revenu_salarial = st.number_input("Revenu Salarial Annuel Net Imposable (€)", 0.0, step=1000.0, key="rev")
-    ca_auto = st.number_input("Chiffre d'Affaires Auto-Entrepreneur Annuel (€)", 0.0, step=1000.0, key="ca")
+    if st.button("🔁 Réinitialiser"):
+        for key, val in default_inputs.items():
+            st.session_state[key] = val
+        st.session_state["simulation"] = None
+        st.experimental_rerun()
+
+    # Inputs avec conservation
+    revenu_salarial = st.number_input("Revenu Salarial Annuel Net Imposable (€)", 0.0, step=1000.0, key="revenu_salarial")
+    ca_auto = st.number_input("Chiffre d'Affaires Auto-Entrepreneur Annuel (€)", 0.0, step=1000.0, key="ca_auto")
     parts = st.number_input("Nombre de Parts", 1.0, step=0.5, key="parts")
     aide = st.number_input("Aide Familiale (€)", 0.0, step=100.0, key="aide")
     garde = st.number_input("Frais de Garde (€)", 0.0, step=100.0, key="garde")
@@ -99,7 +118,6 @@ def simulation_page():
         )
         st.success("✅ Simulation enregistrée !")
 
-    # Affichage du résultat
     result = st.session_state["simulation"]
     if result:
         with st.expander("Résumé"):
@@ -112,25 +130,13 @@ def simulation_page():
             for t in result["details_tranches"]:
                 st.write(t)
 
-# --- Fonction pour la page d’Information ---
+# --- Page d’Information ---
 def page_information():
-    st.title("📊 Visualisation des taux 2025")
+    st.title("📊 Visualisation des taux d'imposition 2025")
 
-    # On récupère la valeur par défaut de la simulation si elle existe
-    default = 3000
-    sim = st.session_state.get("simulation")
-    if sim:
-        default = sim["revenu_net_mensuel"]
+    default = int(st.session_state.get("revenu_net_mensuel", 3000))
+    salaire = st.slider("Salaire net mensuel avant impôt (€)", 1000, 15000, value=default, step=100)
 
-    salaire = st.slider(
-        "Salaire net mensuel avant impôt (€)", 
-        1000, 15000, 
-        value=int(default), 
-        step=100, 
-        help="Par défaut, votre dernier résultat de simulation"
-    )
-
-    # --- Calculs et tracés (identiques à ton code) ---
     revenus_bruts_m = np.linspace(1000, 15000, 500)
     revenus_bruts_a = revenus_bruts_m * 12
     revenus_nets_a = revenus_bruts_a * 0.77
@@ -164,16 +170,13 @@ def page_information():
     taux_marg_arr = np.array([tx_marg(r) for r in revenus_nets_a])
     taux_nom = impots_a / revenus_bruts_a
 
-    # Valeurs ciblées
     rna = salaire * 12
     rba = rna / 0.77
     _, details = calc_imp(rna)
-    ie = impots_a
     te_c = (calc_imp(rna)[0] / rna) * 100
     tm_c = tx_marg(rna) * 100
     tn_c = (calc_imp(rna)[0] / rba) * 100
 
-    # Tracé
     fig, ax = plt.subplots(figsize=(10, 6))
     colors = ['#e0f7fa','#b2ebf2','#80deea','#4dd0e1','#26c6da']
     for (b, h, _), c in zip(bareme, colors):
@@ -193,7 +196,6 @@ def page_information():
     ax.grid(True); ax.legend()
     st.pyplot(fig)
 
-    # Analyse
     st.markdown("---")
     st.subheader("🧮 Analyse")
     st.markdown(f"""
@@ -208,8 +210,7 @@ def page_information():
         for bas, haut, tr, tx, mnt in details:
             st.markdown(f"- {bas:.0f}→{haut:.0f} : {tr:.0f}×{int(tx*100)}% = {mnt:.0f} €")
 
-
-# --- Barre latérale de navigation simplifiée ---
+# --- Navigation ---
 st.sidebar.title("Menu")
 page = st.sidebar.radio("", ["Simulation", "Page d'information"])
 
