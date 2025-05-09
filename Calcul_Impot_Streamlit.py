@@ -1,4 +1,6 @@
 import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Initialisation des variables dans session_state
 if "simulation1" not in st.session_state:
@@ -135,9 +137,6 @@ def simulation_page(titre, key):
         with st.expander("Détails des Tranches d'Imposition"):
             for tranche in result["details_tranches"]:
                 st.write(tranche)
-
-import numpy as np
-import matplotlib.pyplot as plt
 
 def page_information():
     st.title("📊 Visualisation des taux d'imposition 2025")
