@@ -123,23 +123,19 @@ def simulation_page():
 
 # --- Fonction pour la page d’Information ---
 def page_information():
-    st.title("📊 Visualisation des taux 2025")
+    st.title("📊 Visualisation des taux 2025 selon votre situation")
 
-    # On récupère la valeur par défaut de la simulation si elle existe
-    default = 3000
     sim = st.session_state.get("simulation")
-    if sim:
-        default = sim["revenu_net_mensuel"]
+    if not sim:
+        st.warning("Aucune simulation enregistrée. Veuillez d'abord remplir la page de simulation.")
+        return
 
-    salaire = st.slider(
-        "Salaire net mensuel avant impôt (€)", 
-        1000, 15000, 
-        value=int(default), 
-        step=100, 
-        help="Par défaut, votre dernier résultat de simulation"
-    )
+    # Extraire les données de la simulation
+    revenu_imposable_apres_aide = sim["details"]["Revenu imposable annuel après aides"]
+    quotient_familial = revenu_imposable_apres_aide / sim["nombre_parts"]
+    quotient_mensuel = quotient_familial / 12
 
-    # --- Calculs et tracés (identiques à ton code) ---
+    # Préparation des courbes de référence
     revenus_bruts_m = np.linspace(1000, 15000, 500)
     revenus_bruts_a = revenus_bruts_m * 12
     revenus_nets_a = revenus_bruts_a * 0.77
@@ -152,6 +148,7 @@ def page_information():
         (82341, 177106, 0.41),
         (177106, float('inf'), 0.45)
     ]
+
     def calc_imp(r):
         i, d = 0, []
         for bas, haut, tx in bareme:
@@ -163,9 +160,11 @@ def page_information():
             else:
                 break
         return i, d
+
     def tx_marg(r):
         for bas, _, tx in reversed(bareme):
-            if r > bas: return tx
+            if r > bas:
+                return tx
         return 0.0
 
     impots_a = np.array([calc_imp(r)[0] for r in revenus_nets_a])
@@ -173,50 +172,56 @@ def page_information():
     taux_marg_arr = np.array([tx_marg(r) for r in revenus_nets_a])
     taux_nom = impots_a / revenus_bruts_a
 
-    # Valeurs ciblées
-    rna = salaire * 12
+    # Données ciblées
+    rna = revenu_imposable_apres_aide
     rba = rna / 0.77
-    _, details = calc_imp(rna)
-    ie = impots_a
-    te_c = (calc_imp(rna)[0] / rna) * 100
+    impot_cible, details = calc_imp(rna)
+    te_c = (impot_cible / rna) * 100
     tm_c = tx_marg(rna) * 100
-    tn_c = (calc_imp(rna)[0] / rba) * 100
+    tn_c = (impot_cible / rba) * 100
 
-    # Tracé
+    # Tracé du graphique
     fig, ax = plt.subplots(figsize=(10, 6))
-    colors = ['#e0f7fa','#b2ebf2','#80deea','#4dd0e1','#26c6da']
-    for (b, h, _), c in zip(bareme, colors):
+    couleurs = ['#e0f7fa','#b2ebf2','#80deea','#4dd0e1','#26c6da']
+    for (b, h, _), c in zip(bareme, couleurs):
         ax.axvspan(b/12, h/12, facecolor=c, alpha=0.4)
+
     ax.plot(revenus_nets_m, taux_eff*100, label="Taux effectif", lw=2)
     ax.plot(revenus_nets_m, taux_marg_arr*100, '--', label="Taux marginal")
     ax.plot(revenus_nets_m, taux_nom*100, ':', label="Taux nominal")
-    ax.axvline(salaire, color='red', ls='--')
-    ax.plot(salaire, te_c, 'ro')
-    ax.annotate(f"{te_c:.1f}%", (salaire, te_c),
-                xytext=(salaire+200, te_c+2),
+
+    ax.axvline(quotient_mensuel, color='red', ls='--')
+    ax.plot(quotient_mensuel, te_c, 'ro')
+    ax.annotate(f"{te_c:.1f}%", (quotient_mensuel, te_c),
+                xytext=(quotient_mensuel + 200, te_c + 2),
                 arrowprops=dict(arrowstyle="->", color='red'),
                 color='red')
-    ax.set_xlabel("Salaire net mensuel (€)")
+
+    ax.set_xlabel("Quotient familial mensuel (€)")
     ax.set_ylabel("Taux (%)")
-    ax.set_title("Taux d'imposition 2025")
-    ax.grid(True); ax.legend()
+    ax.set_title("Taux d'imposition 2025 basé sur votre situation simulée")
+    ax.grid(True)
+    ax.legend()
     st.pyplot(fig)
 
-    # Analyse
+    # Analyse détaillée
     st.markdown("---")
-    st.subheader("🧮 Analyse")
+    st.subheader("🧮 Analyse basée sur votre simulation")
     st.markdown(f"""
-- **Revenu net annuel** : {rna:.0f} €
-- **Revenu brut estimé** : {rba:.0f} €
-- **Impôt annuel** : {calc_imp(rna)[0]:.0f} €
+- **Revenu imposable total après aides** : {rna:.0f} €
+- **Nombre de parts** : {sim["nombre_parts"]:.2f}
+- **Quotient familial annuel** : {quotient_familial:.0f} €
+- **Quotient familial mensuel** : {quotient_mensuel:.0f} €
+- **Revenu brut estimé (équivalent)** : {rba:.0f} €
+- **Impôt annuel (sur 1 part)** : {impot_cible:.0f} €
 - **Taux effectif** : {te_c:.1f} %
 - **Taux marginal** : {tm_c:.1f} %
 - **Taux nominal** : {tn_c:.1f} %
 """)
-    with st.expander("📊 Détail par tranche"):
-        for bas, haut, tr, tx, mnt in details:
-            st.markdown(f"- {bas:.0f}→{haut:.0f} : {tr:.0f}×{int(tx*100)}% = {mnt:.0f} €")
 
+    with st.expander("📊 Détail par tranche appliquée à votre simulation"):
+        for bas, haut, tr, tx, mnt in details:
+            st.markdown(f"- {bas:.0f} → {haut:.0f} : {tr:.0f} × {int(tx*100)}% = {mnt:.0f} €")
 
 # --- Barre latérale de navigation simplifiée ---
 st.sidebar.title("Menu")
