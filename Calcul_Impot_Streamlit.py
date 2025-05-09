@@ -2,6 +2,15 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
+# --- Pied de page / Informations version ---
+st.sidebar.markdown("---")
+st.sidebar.caption("🛠️ Développé par **I. Bitar**")
+st.sidebar.caption("📅 Dernière mise à jour : **9 mai 2025**")
+st.sidebar.caption("🔢 Version : **v1.0.0**")
+
+st.markdown("---")
+st.caption("🛠️ Développé par **I. Bitar** · 📅 Dernière mise à jour : **9 mai 2025** · 🔢 Version : **v1.0.0**")
+
 # --- Initialisation du state pour stocker le résultat de la simulation ---
 if "simulation" not in st.session_state:
     st.session_state["simulation"] = None
