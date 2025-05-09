@@ -78,8 +78,10 @@ def calcul_impot(revenu_salarial, chiffre_affaire_autoentrepreneur, nombre_parts
     }
 
 # Sidebar pour navigation
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Choisissez une simulation :", ["Simulation 1", "Simulation 2", "Comparaison"])
+page = st.sidebar.radio(
+    "Choisissez une simulation :",
+    ["Simulation 1", "Simulation 2", "Comparaison", "Page d'information"]
+)
 
 # Informations contextuelles sur les tranches et la décote (année 2025)
 st.sidebar.markdown("### Informations fiscales 2025")
@@ -134,6 +136,105 @@ def simulation_page(titre, key):
             for tranche in result["details_tranches"]:
                 st.write(tranche)
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+def page_information():
+    st.title("📊 Visualisation des taux d'imposition 2025")
+
+    salaire = st.slider("Sélectionnez votre salaire net mensuel avant impôt (€)", 1000, 15000, 3000, step=100)
+
+    fig, ax = plt.subplots(figsize=(12, 7))
+
+    # Données
+    revenus_bruts_mensuels = np.linspace(1000, 15000, 500)
+    revenus_bruts_annuels = revenus_bruts_mensuels * 12
+    revenus_nets_annuels = revenus_bruts_annuels * 0.77
+    revenus_nets_mensuels = revenus_nets_annuels / 12
+
+    # Barème
+    bareme = [
+        (0, 11294, 0.00),
+        (11294, 28797, 0.11),
+        (28797, 82341, 0.30),
+        (82341, 177106, 0.41),
+        (177106, float('inf'), 0.45)
+    ]
+
+    def calcul_impot(r):
+        i, d = 0, []
+        for bas, haut, taux in bareme:
+            if r > bas:
+                tr = min(haut, r) - bas
+                m = tr * taux
+                i += m
+                d.append((bas, min(haut, r), tr, taux, m))
+            else:
+                break
+        return i, d
+
+    def taux_marginal(r):
+        for bas, _, taux in reversed(bareme):
+            if r > bas:
+                return taux
+        return 0.0
+
+    impots_annuels = np.array([calcul_impot(r)[0] for r in revenus_nets_annuels])
+    taux_eff = impots_annuels / revenus_nets_annuels
+    taux_marg = np.array([taux_marginal(r) for r in revenus_nets_annuels])
+    taux_nom = impots_annuels / revenus_bruts_annuels
+
+    # Valeurs cibles
+    revenu_net_annuel = salaire * 12
+    revenu_brut_annuel = revenu_net_annuel / 0.77
+    revenu_brut_mensuel = revenu_brut_annuel / 12
+    impot, details = calcul_impot(revenu_net_annuel)
+    taux_eff_cible = impot / revenu_net_annuel * 100
+    taux_marg_cible = taux_marginal(revenu_net_annuel) * 100
+    taux_nom_cible = impot / revenu_brut_annuel * 100
+
+    # Tracés
+    couleurs = ['#e0f7fa', '#b2ebf2', '#80deea', '#4dd0e1', '#26c6da']
+    for (bas, haut, _), c in zip(bareme, couleurs):
+        ax.axvspan(bas / 12, haut / 12, facecolor=c, alpha=0.4)
+
+    ax.plot(revenus_nets_mensuels, taux_eff * 100, label="Taux effectif", linewidth=2)
+    ax.plot(revenus_nets_mensuels, taux_marg * 100, '--', label="Taux marginal")
+    ax.plot(revenus_nets_mensuels, taux_nom * 100, ':', label="Taux nominal")
+
+    ax.axvline(salaire, color='red', linestyle='--')
+    ax.plot(salaire, taux_eff_cible, 'ro', label=f"Vous ({salaire} €)")
+    ax.annotate(f"{taux_eff_cible:.1f}%", 
+                xy=(salaire, taux_eff_cible), 
+                xytext=(salaire + 200, taux_eff_cible + 2),
+                arrowprops=dict(arrowstyle="->", color='red'),
+                fontsize=10, color='red')
+
+    ax.set_xlabel("Salaire net mensuel (€)")
+    ax.set_ylabel("Taux (%)")
+    ax.set_title("Taux d'imposition 2025 en fonction du salaire net mensuel")
+    ax.set_xticks(np.arange(0, 15001, 1000))
+    ax.set_yticks(np.arange(0, 51, 5))
+    ax.grid(True)
+    ax.legend()
+    st.pyplot(fig)
+
+    # Analyse textuelle
+    st.markdown("---")
+    st.subheader("🧮 Analyse pour votre salaire sélectionné")
+    st.markdown(f"""
+- **Revenu net annuel** : {revenu_net_annuel:.0f} €
+- **Revenu brut estimé** : {revenu_brut_annuel:.0f} €
+- **Impôt annuel** : {impot:.0f} €
+- **Taux effectif** : {taux_eff_cible:.1f} %
+- **Taux marginal** : {taux_marg_cible:.1f} %
+- **Taux nominal** : {taux_nom_cible:.1f} %
+""")
+    with st.expander("📊 Détail par tranche"):
+        for bas, haut, tr, tx, mnt in details:
+            st.markdown(f"- {bas:.0f} € → {haut:.0f} € : {tr:.0f} € × {int(tx * 100)}% = {mnt:.0f} €")
+
+
 # Comparaison des deux simulations
 if page == "Simulation 1":
     simulation_page("Simulation 1", "simulation1")
@@ -168,5 +269,8 @@ elif page == "Comparaison":
             st.write(f"- Nombre de Parts : {sim2['nombre_parts']:.2f}")
             for k, v in sim2["details"].items():
                 st.write(f"- **{k} :** {v:.2f} €")
+    elif page == "Page d'information":
+        page_information()
+        
     else:
         st.warning("Veuillez compléter les deux simulations avant de comparer.")
