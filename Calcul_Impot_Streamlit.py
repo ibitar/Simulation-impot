@@ -90,6 +90,38 @@ def calcul_impot(revenu_salarial, chiffre_affaire_autoentrepreneur,
     }
 
 # --- Fonction pour la page Simulation ---
+def simulation_page():
+    st.title("Simulation d'Impôt")
+
+    # Inputs
+    revenu_salarial = st.number_input("Revenu Salarial Annuel Net Imposable (€)", 0.0, step=1000.0, key="rev")
+    ca_auto = st.number_input("Chiffre d'Affaires Auto-Entrepreneur Annuel (€)", 0.0, step=1000.0, key="ca")
+    parts = st.number_input("Nombre de Parts", 1.0, step=0.5, key="parts")
+    aide = st.number_input("Aide Familiale (€)", 0.0, step=100.0, key="aide")
+    garde = st.number_input("Frais de Garde (€)", 0.0, step=100.0, key="garde")
+    red = st.checkbox("Réduction Forfaitaire 10% sur Salaire", key="red")
+    couple = st.checkbox("Couple (Marié/Pacsé)", key="couple")
+
+    if st.button("Calculer"):
+        st.session_state["simulation"] = calcul_impot(
+            revenu_salarial, ca_auto, parts, red, aide, garde, couple
+        )
+        st.success("✅ Simulation enregistrée !")
+
+    # Affichage du résultat
+    result = st.session_state["simulation"]
+    if result:
+        with st.expander("Résumé"):
+            st.metric("Impôt Final (€)", f"{result['impot_final']:.2f}")
+            st.metric("Revenu Net Mensuel (€)", f"{result['revenu_net_mensuel']:.2f}")
+        with st.expander("Détails"):
+            for k, v in result["details"].items():
+                st.write(f"**{k} :** {v:.2f} €")
+        with st.expander("Tranches"):
+            for t in result["details_tranches"]:
+                st.write(t)
+
+# --- Fonction pour la page d’Information ---
 def page_information():
     st.title("📊 Visualisation des taux 2025 selon votre situation simulée")
 
@@ -194,10 +226,6 @@ def page_information():
     with st.expander("📊 Détail par tranche appliquée à votre quotient familial"):
         for bas, haut, tr, tx, mnt in details:
             st.markdown(f"- De {bas:.0f} € à {haut:.0f} € : {tr:.0f} € × {int(tx*100)}% = {mnt:.0f} €")
-
-    with st.expander("📊 Détail par tranche appliquée à votre simulation"):
-        for bas, haut, tr, tx, mnt in details:
-            st.markdown(f"- {bas:.0f} → {haut:.0f} : {tr:.0f} × {int(tx*100)}% = {mnt:.0f} €")
 
 # --- Barre latérale de navigation simplifiée ---
 st.sidebar.title("Menu")
