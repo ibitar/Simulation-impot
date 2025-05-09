@@ -7,11 +7,56 @@ if "simulation" not in st.session_state:
     st.session_state["simulation"] = None
 
 # --- Fonction de calcul d'impôt (inchangée) ---
+# Fonction de calcul d'impôt
 def calcul_impot(revenu_salarial, chiffre_affaire_autoentrepreneur,
                  nombre_parts, reduction_forfaitaire=False,
                  aide_familiale=0, frais_garde=0, est_couple=False):
-    # … ton code de calcul ici (identique) …
-    # À la fin, on renvoie aussi revenu_net_mensuel
+    if reduction_forfaitaire:
+        revenu_salarial_apres_reduction = revenu_salarial * 0.90
+        reduction_salariale = revenu_salarial - revenu_salarial_apres_reduction
+    else:
+        revenu_salarial_apres_reduction = revenu_salarial
+        reduction_salariale = 0
+
+    revenu_autoentrepreneur = chiffre_affaire_autoentrepreneur * 0.66
+    reduction_autoentrepreneur = chiffre_affaire_autoentrepreneur * 0.34
+
+    revenu_imposable = revenu_salarial_apres_reduction + revenu_autoentrepreneur
+    revenu_imposable_apres_aide = revenu_imposable - aide_familiale
+    quotient_familial = revenu_imposable_apres_aide / nombre_parts
+
+    tranches = [
+        (0, 11497, 0.00),
+        (11497, 29315, 0.11),
+        (29315, 83823, 0.30),
+        (83823, 180294, 0.41),
+        (180294, float('inf'), 0.45)
+    ]
+
+    impot_quotient = 0
+    details_tranches = []
+    for tranche in tranches:
+        if quotient_familial > tranche[1]:
+            impot_tranche = (tranche[1] - tranche[0]) * tranche[2]
+            impot_quotient += impot_tranche
+            details_tranches.append(f"Tranche {tranche[0]}€ à {tranche[1]}€ : {impot_tranche:.2f} €")
+        else:
+            impot_tranche = (quotient_familial - tranche[0]) * tranche[2]
+            impot_quotient += impot_tranche
+            details_tranches.append(f"Tranche {tranche[0]}€ à {quotient_familial:.2f}€ : {impot_tranche:.2f} €")
+            break
+
+    impot_total = impot_quotient * nombre_parts
+
+    if est_couple:
+        decote = max(0, 1470 - 0.4525 * impot_total)
+    else:
+        decote = max(0, 889 - 0.4525 * impot_total)
+
+    impot_apres_decote = max(0, impot_total - decote)
+    reduction_frais_garde = frais_garde * 0.50
+    impot_final = max(0, impot_apres_decote - reduction_frais_garde)
+
     revenu_net_annuel = revenu_imposable_apres_aide - impot_final
     revenu_net_mensuel = revenu_net_annuel / 12
 
@@ -19,7 +64,19 @@ def calcul_impot(revenu_salarial, chiffre_affaire_autoentrepreneur,
         "impot_final": impot_final,
         "revenu_net_mensuel": revenu_net_mensuel,
         "nombre_parts": nombre_parts,
-        "details": { ... },          # tes détails ici
+        "details": {
+            "Revenu salarial initial": revenu_salarial,
+            "Réduction salariale forfaitaire (10%)": reduction_salariale,
+            "Revenu (chiffre d'affaire) auto-entrepreneur ": chiffre_affaire_autoentrepreneur,
+            "Réduction auto-entrepreneur (34%)": reduction_autoentrepreneur,
+            "Revenu imposable annuel total": revenu_imposable,
+            "Déduction pour aides et dons": aide_familiale,
+            "Revenu imposable annuel après aides": revenu_imposable_apres_aide,
+            "Impôt brut avant décote": impot_total,
+            "Décote": decote,
+            "Impôt après décote": impot_apres_decote,
+            "Réduction frais de garde (50%)": reduction_frais_garde,
+        },
         "details_tranches": details_tranches
     }
 
