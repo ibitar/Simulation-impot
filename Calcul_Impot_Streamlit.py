@@ -268,8 +268,8 @@ elif page == "Comparaison":
             st.write(f"- Nombre de Parts : {sim2['nombre_parts']:.2f}")
             for k, v in sim2["details"].items():
                 st.write(f"- **{k} :** {v:.2f} €")
-    elif page == "Page d'information":
-        page_information()
-        
+ 
     else:
         st.warning("Veuillez compléter les deux simulations avant de comparer.")
+elif page == "Page d'information":
+    page_information()
