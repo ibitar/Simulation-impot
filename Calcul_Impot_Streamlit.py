@@ -122,9 +122,8 @@ def simulation_page():
                 st.write(t)
     # Affichage visuel de la répartition
     with st.expander("Visualisation de la répartition"):
-        sim = st.session_state.get("simulation")
-        revenu_net = sim["details"]["Revenu imposable annuel après aides"]
-        impot_total = sim["details"]["Impôt après décote"]  # ou sim["impot_final"]
+        revenu_net = result["details"]["Revenu imposable annuel après aides"]
+        impot_total = result["details"]["Impôt après décote"]  # ou sim["impot_final"]
 
         fig = generate_pie_chart(revenu_net, impot_total)
         st.pyplot(fig)
