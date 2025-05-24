@@ -110,20 +110,20 @@ def simulation_page():
 
     result = st.session_state.get("simulation")
     if result:
-        with st.expander("Résumé"):
+        with st.expander("Résumé", expanded=True):
             st.metric("Impôt Final (€)", f"{result['impot_final']:.2f}")
             st.metric("Revenu Net Mensuel (€)", f"{result['revenu_net_mensuel']:.2f}")
 
-        with st.expander("Détails"):
+        with st.expander("Détails", expanded=True):
             for k, v in result["details"].items():
                 st.write(f"**{k} :** {v:.2f} €")
 
-        with st.expander("Tranches"):
+        with st.expander("Tranches", expanded=True):
             for t in result["details_tranches"]:
                 st.write(t)
 
         # Graphique circulaire
-        with st.expander("Visualisation de la répartition"):
+        with st.expander("Visualisation de la répartition", expanded=True):
             revenu_net = result["details"]["Revenu imposable annuel après aides"]
             impot_total = result["details"]["Impôt après décote"]
 
