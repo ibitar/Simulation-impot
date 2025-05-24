@@ -108,25 +108,33 @@ def simulation_page():
         )
         st.success("✅ Simulation enregistrée !")
 
-    # Affichage du résultat
-    result = st.session_state["simulation"]
+    result = st.session_state.get("simulation")
     if result:
         with st.expander("Résumé"):
             st.metric("Impôt Final (€)", f"{result['impot_final']:.2f}")
             st.metric("Revenu Net Mensuel (€)", f"{result['revenu_net_mensuel']:.2f}")
+
         with st.expander("Détails"):
             for k, v in result["details"].items():
                 st.write(f"**{k} :** {v:.2f} €")
+
         with st.expander("Tranches"):
             for t in result["details_tranches"]:
                 st.write(t)
-    # Affichage visuel de la répartition
-    with st.expander("Visualisation de la répartition"):
-        revenu_net = result["details"]["Revenu imposable annuel après aides"]
-        impot_total = result["details"]["Impôt après décote"]  # ou sim["impot_final"]
 
-        fig = generate_pie_chart(revenu_net, impot_total)
-        st.pyplot(fig)
+        # Graphique circulaire
+        with st.expander("Visualisation de la répartition"):
+            revenu_net = result["details"]["Revenu imposable annuel après aides"]
+            impot_total = result["details"]["Impôt après décote"]
+
+            fig, ax = plt.subplots()
+            labels = ['Impôt payé', 'Revenu net après impôt']
+            values = [impot_total, revenu_net - impot_total]
+            colors = ['#ff6b6b', '#4ecdc4']
+            ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors)
+            ax.axis('equal')
+            ax.set_title("Répartition de l'impôt sur le revenu net annuel")
+            st.pyplot(fig)
 
 # --- Fonction pour la page d’Information ---
 def page_information():
