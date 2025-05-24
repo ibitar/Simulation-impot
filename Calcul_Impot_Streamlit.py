@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 # --- Pied de page / Informations version ---
 st.sidebar.markdown("---")
@@ -89,6 +90,41 @@ def calcul_impot(revenu_salarial, chiffre_affaire_autoentrepreneur,
         "details_tranches": details_tranches
     }
 
+def generate_html_report(result_dict):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Rapport Simulation Impôt</title>
+</head>
+<body>
+    <h1>Rapport de Simulation d'Impôt</h1>
+    <p><strong>Date de génération :</strong> {now}</p>
+    <hr>
+    <h2>Résumé</h2>
+    <p><strong>Impôt Final (€):</strong> {result_dict['impot_final']:.2f}</p>
+    <p><strong>Revenu Net Mensuel (€):</strong> {result_dict['revenu_net_mensuel']:.2f}</p>
+    <h2>Détails</h2>
+    <ul>
+    """
+    for k, v in result_dict["details"].items():
+        html += f"<li><strong>{k}:</strong> {v:.2f} €</li>"
+    html += """
+    </ul>
+    <h2>Détails des Tranches</h2>
+    <ul>
+    """
+    for t in result_dict["details_tranches"]:
+        html += f"<li>{t}</li>"
+    html += """
+    </ul>
+</body>
+</html>
+"""
+    return html.encode("utf-8")
+
+
 # --- Fonction pour la page Simulation ---
 def simulation_page():
     st.title("Simulation d'Impôt")
@@ -135,6 +171,15 @@ def simulation_page():
             ax.axis('equal')
             ax.set_title("Répartition de l'impôt sur le revenu net annuel")
             st.pyplot(fig)
+            
+        with st.expander("📄 Télécharger le rapport HTML", expanded=False):
+            html_data = generate_html_report(result)
+            st.download_button(
+                label="📥 Télécharger le rapport",
+                data=html_data,
+                file_name=f"rapport_impot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+                mime="text/html"
+            )
 
 # --- Fonction pour la page d’Information ---
 def page_information():
