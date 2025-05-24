@@ -120,6 +120,13 @@ def simulation_page():
         with st.expander("Tranches"):
             for t in result["details_tranches"]:
                 st.write(t)
+    # Affichage visuel de la répartition
+    with st.expander("Visualisation de la répartition"):
+        revenu_net = sim["details"]["Revenu imposable annuel après aides"]
+        impot_total = sim["details"]["Impôt après décote"]  # ou sim["impot_final"]
+
+        fig = generate_pie_chart(revenu_net, impot_total)
+        st.pyplot(fig)
 
 # --- Fonction pour la page d’Information ---
 def page_information():
