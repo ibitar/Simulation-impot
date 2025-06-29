@@ -287,11 +287,129 @@ def page_information():
         for bas, haut, tr, tx, mnt in details:
             st.markdown(f"- De {bas:.0f} € à {haut:.0f} € : {tr:.0f} € × {int(tx*100)}% = {mnt:.0f} €")
 
+import math
+
+def page_credit():
+    st.title("🏠 Simulation Capacité d'Emprunt")
+
+    # Récupération des données de la simulation
+    sim = st.session_state.get("simulation")
+    if sim:
+        revenu_net_simulation = sim["revenu_net_mensuel"]
+        st.success(
+            f"✅ Salaire net mensuel récupéré depuis la simulation : "
+            f"**{revenu_net_simulation:,.2f} €**"
+        )
+    else:
+        st.info("Aucune simulation trouvée. Veuillez saisir votre salaire manuellement.")
+        revenu_net_simulation = st.number_input(
+            "Salaire net mensuel (€)",
+            min_value=0.0,
+            step=100.0
+        )
+
+    # Charges existantes
+    st.header("Vos charges existantes")
+    has_existing_loan = st.checkbox("Avez-vous déjà un prêt immobilier en cours ?")
+
+    mensualite_existante = 0.0
+    revenus_locatifs_net = 0.0
+    txt_info_location = ""
+
+    if has_existing_loan:
+        mensualite_existante = st.number_input(
+            "Montant mensuel du prêt existant (€)",
+            min_value=0.0,
+            step=50.0
+        )
+
+        # Option location du bien existant
+        is_rented = st.checkbox("Ce bien est-il mis en location ?")
+
+        if is_rented:
+            loyer_brut = st.number_input(
+                "Loyer mensuel brut perçu (€)",
+                min_value=0.0,
+                step=50.0
+            )
+            taux_integration = st.slider(
+                "Taux d'intégration des loyers (%)",
+                min_value=50,
+                max_value=100,
+                value=70,
+                step=5,
+                help="Les banques prennent souvent 70% à 80% du loyer pour le calcul de la capacité d'emprunt."
+            )
+            revenus_locatifs_net = loyer_brut * (taux_integration / 100)
+            txt_info_location = (
+                f"✅ Revenus locatifs intégrés à hauteur de {taux_integration}% : "
+                f"**{revenus_locatifs_net:.2f} €**"
+            )
+            st.success(txt_info_location)
+
+    # Revenu net total pris en compte
+    revenu_total = revenu_net_simulation + revenus_locatifs_net
+
+    st.header("Projet d'emprunt")
+    taux_emprunt = st.number_input(
+        "Taux d'intérêt nominal (%)",
+        min_value=0.1, max_value=10.0,
+        value=4.0, step=0.1
+    )
+    duree_annees = st.number_input(
+        "Durée de l'emprunt (années)",
+        min_value=5, max_value=30,
+        value=20, step=1
+    )
+
+    if revenu_total > 0:
+        taux_endettement_max = 0.35
+        capacite_mensuelle = revenu_total * taux_endettement_max - mensualite_existante
+        capacite_mensuelle = max(capacite_mensuelle, 0)
+
+        nb_mois = duree_annees * 12
+        taux_mensuel = taux_emprunt / 100 / 12
+
+        if taux_mensuel > 0:
+            capital_max = capacite_mensuelle * (1 - (1 + taux_mensuel) ** -nb_mois) / taux_mensuel
+        else:
+            capital_max = capacite_mensuelle * nb_mois
+
+        st.subheader("💰 Résultats")
+        st.metric("Capacité d'emprunt mensuelle (€)", f"{capacite_mensuelle:.2f}")
+        st.metric("Montant du prêt maximal (€)", f"{capital_max:.2f}")
+
+        # Récapitulatif clair de toutes les hypothèses
+        st.markdown("### 🔎 Hypothèses prises en compte :")
+        st.markdown(f"- **Revenu net mensuel (simulation)** : {revenu_net_simulation:.2f} €")
+        if revenus_locatifs_net > 0:
+            st.markdown(f"- **Revenus locatifs pris en compte** : {revenus_locatifs_net:.2f} €")
+        st.markdown(f"- **Revenu total pris en compte** : {revenu_total:.2f} €")
+        st.markdown(f"- **Mensualité existante** : {mensualite_existante:.2f} €")
+        st.markdown(f"- **Taux d'endettement max** : 35 %")
+        st.markdown(f"- **Taux nominal du prêt** : {taux_emprunt:.2f} %")
+        st.markdown(f"- **Durée du prêt** : {duree_annees} ans")
+
+        st.info(
+            f"Pour un taux de **{taux_emprunt:.2f} %** sur **{duree_annees} ans**, "
+            f"votre capacité d'emprunt est estimée à environ **{capital_max:,.0f} €** "
+            f"avec une mensualité de **{capacite_mensuelle:,.0f} €**."
+        )
+    else:
+        st.warning("Veuillez saisir vos revenus ou effectuer d'abord la simulation.")
+
+
 # --- Barre latérale de navigation simplifiée ---
 st.sidebar.title("Menu")
-page = st.sidebar.radio("", ["Simulation", "Page d'information"])
+page = st.sidebar.radio(
+    "",
+    ["Simulation", "Page d'information", "Capacité d'emprunt"]
+)
 
 if page == "Simulation":
     simulation_page()
-else:
+elif page == "Page d'information":
     page_information()
+elif page == "Capacité d'emprunt":
+    page_credit()
+
