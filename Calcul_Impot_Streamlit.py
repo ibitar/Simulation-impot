@@ -291,6 +291,40 @@ def page_brut_net():
         chomage_apres_mai_2025=chomage_mai,
     )
 
+    net_imposable_mensuel = res.net_imposable
+    net_imposable_annuel = res.net_imposable * 12
+    net_a_payer_mensuel = res.net_a_payer
+    net_a_payer_annuel = res.net_a_payer * 12
+
+    brut_net_result = {
+        "revenu_net_imposable_mensuel": net_imposable_mensuel,
+        "revenu_net_imposable_annuel": net_imposable_annuel,
+        "net_a_payer_mensuel": net_a_payer_mensuel,
+        "net_a_payer_annuel": net_a_payer_annuel,
+        "period": period,
+    }
+
+    previous_result = st.session_state.get("brut_net_result")
+    if previous_result != brut_net_result:
+        previous_version = st.session_state.get("brut_net_ready_version", 0)
+        new_version = previous_version + 1
+        st.session_state["brut_net_ready_version"] = new_version
+        st.session_state["brut_net_result"] = brut_net_result
+
+        applied_version = st.session_state.get("brut_net_applied_version")
+        if applied_version not in (None, new_version):
+            for key in [
+                "revenu_net_imposable_annuel",
+                "revenu_net_imposable_mensuel",
+                "net_a_payer_annuel",
+                "net_a_payer_mensuel",
+            ]:
+                st.session_state.pop(key, None)
+            if st.session_state.get("revenu_net_source") == "brut_net":
+                st.session_state.pop("rev", None)
+                st.session_state["revenu_net_source"] = "brut_net_stale"
+            st.session_state["brut_net_applied_version"] = None
+
     st.markdown("### Résumé")
     resume = {
         "Brut mensuel": round(res.brut_mensuel, 2),
@@ -398,6 +432,29 @@ def page_brut_net():
         mime="text/csv",
     )
 
+    ready_version = st.session_state.get("brut_net_ready_version")
+    applied_version = st.session_state.get("brut_net_applied_version")
+    pending_export = ready_version is not None and ready_version != applied_version
+
+    if pending_export and st.session_state.get("revenu_net_source") == "brut_net_stale":
+        st.info(
+            "Le calcul a été mis à jour : réexportez les montants pour les utiliser dans la"
+            " simulation d'impôt."
+        )
+
+    if st.button("Utiliser dans la simulation"):
+        st.session_state["revenu_net_imposable_annuel"] = net_imposable_annuel
+        st.session_state["revenu_net_imposable_mensuel"] = net_imposable_mensuel
+        st.session_state["net_a_payer_annuel"] = net_a_payer_annuel
+        st.session_state["net_a_payer_mensuel"] = net_a_payer_mensuel
+        st.session_state["revenu_net_source"] = "brut_net"
+        st.session_state["brut_net_applied_version"] = st.session_state.get(
+            "brut_net_ready_version"
+        )
+        st.session_state["rev"] = net_imposable_annuel
+        st.session_state["page"] = "Simulation"
+        st.success("✅ Montants transférés vers la simulation d'impôt.")
+
     st.markdown("---")
     st.markdown("**Notes importantes**")
     st.markdown(
@@ -425,6 +482,9 @@ def page_brut_net():
 # --- Initialisation du state pour stocker le résultat de la simulation ---
 if "simulation" not in st.session_state:
     st.session_state["simulation"] = None
+
+if "page" not in st.session_state:
+    st.session_state["page"] = "Simulation"
 
 # --- Fonction de calcul d'impôt (inchangée) ---
 # Fonction de calcul d'impôt
@@ -540,7 +600,33 @@ def simulation_page():
     st.title("Simulation d'Impôt")
 
     # Inputs
-    revenu_salarial = st.number_input("Revenu Salarial Annuel Net Imposable (€)", 0.0, step=1000.0, key="rev")
+    revenu_importe = st.session_state.get("revenu_net_imposable_annuel")
+    valeur_defaut_revenu = revenu_importe if revenu_importe is not None else 0.0
+    revenu_salarial = st.number_input(
+        "Revenu Salarial Annuel Net Imposable (€)",
+        min_value=0.0,
+        value=valeur_defaut_revenu,
+        step=1000.0,
+        key="rev",
+    )
+    source_revenu = st.session_state.get("revenu_net_source")
+    if (
+        source_revenu == "brut_net"
+        and revenu_importe is not None
+        and abs(revenu_salarial - revenu_importe) > 0.5
+    ):
+        st.session_state["revenu_net_source"] = "manuel"
+        source_revenu = "manuel"
+    if source_revenu == "brut_net" and revenu_importe is not None:
+        st.caption(
+            "ℹ️ Valeur importée depuis le module *Brut → Net* :"
+            f" {revenu_importe:,.2f} € annuels."
+        )
+    elif source_revenu == "brut_net_stale":
+        st.warning(
+            "Le dernier transfert Brut → Net n'est plus à jour. Rafraîchissez la valeur ou"
+            " effectuez un nouveau transfert."
+        )
     ca_auto = st.number_input("Chiffre d'Affaires Auto-Entrepreneur Annuel (€)", 0.0, step=1000.0, key="ca")
     parts = st.number_input("Nombre de Parts", 1.0, step=0.5, key="parts")
     aide = st.number_input("Aide Familiale (€)", 0.0, step=100.0, key="aide")
@@ -1036,15 +1122,13 @@ def page_credit():
 
 # --- Barre latérale de navigation simplifiée ---
 st.sidebar.title("Menu")
-page = st.sidebar.radio(
-    "",
-    [
-        "Simulation",
-        "Page d'information",
-        "Capacité d'emprunt",
-        "Brut → Net cadre",
-    ],
-)
+menu_pages = [
+    "Simulation",
+    "Page d'information",
+    "Capacité d'emprunt",
+    "Brut → Net cadre",
+]
+page = st.sidebar.radio("", menu_pages, key="page")
 
 if page == "Simulation":
     simulation_page()
