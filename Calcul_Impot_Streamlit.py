@@ -336,24 +336,120 @@ def page_brut_net():
                 st.session_state["revenu_net_source"] = "brut_net_stale"
             st.session_state["brut_net_applied_version"] = None
 
-    st.markdown("### Résumé")
-    resume = {
-        "Brut mensuel": round(res.brut_mensuel, 2),
-        "Net imposable": round(res.net_imposable, 2),
-        "Net à payer": round(res.net_a_payer, 2),
-        "Total cotisations salarié (hors CSG/CRDS)": round(
-            res.total_cot_sal_hors_csg, 2
-        ),
-        "CSG déductible": round(res.csg_deductible, 2),
-        "CSG non déductible": round(res.csg_non_deductible, 2),
-        "CRDS": round(res.crds, 2),
-        "Total charges employeur": round(res.total_charges_employeur, 2),
-        "Coût total employeur": round(res.cout_total_employeur, 2),
-    }
-    resume_df = pd.DataFrame(resume, index=["Montant"]).T
-    st.dataframe(resume_df)
+    def format_euro(value: float) -> str:
+        return f"{value:,.2f}".replace(",", " ").replace(".", ",") + " €"
 
-    st.markdown("### Détail salarié")
+    def ratio_to_brut(value: float) -> float:
+        return value / res.brut_mensuel if res.brut_mensuel else 0.0
+
+    cotisations_salarie_totales = res.total_cot_sal_hors_csg + res.total_csg_crds
+
+    st.subheader("Synthèse rapide")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Brut mensuel", format_euro(res.brut_mensuel))
+    col2.metric(
+        "Net imposable",
+        format_euro(res.net_imposable),
+        delta=(
+            f"{ratio_to_brut(res.net_imposable) * 100:.1f}% du brut"
+            if res.brut_mensuel
+            else "—"
+        ),
+    )
+    col3.metric(
+        "Net à payer",
+        format_euro(res.net_a_payer),
+        delta=(
+            f"{ratio_to_brut(res.net_a_payer) * 100:.1f}% du brut"
+            if res.brut_mensuel
+            else "—"
+        ),
+    )
+
+    col4, col5 = st.columns(2)
+    col4.metric(
+        "Cotisations salarié (incl. CSG/CRDS)",
+        format_euro(cotisations_salarie_totales),
+        delta=(
+            f"{ratio_to_brut(cotisations_salarie_totales) * 100:.1f}% du brut"
+            if res.brut_mensuel
+            else "—"
+        ),
+    )
+    col5.metric(
+        "Charges employeur",
+        format_euro(res.total_charges_employeur),
+        delta=(
+            f"{ratio_to_brut(res.total_charges_employeur) * 100:.1f}% du brut"
+            if res.brut_mensuel
+            else "—"
+        ),
+    )
+
+    st.caption(
+        f"Coût total employeur : {format_euro(res.cout_total_employeur)}"
+        + (
+            f" ({ratio_to_brut(res.cout_total_employeur) * 100:.1f}% du brut)"
+            if res.brut_mensuel
+            else ""
+        )
+    )
+
+    resume_df = pd.DataFrame(
+        [
+            {
+                "Poste": "Brut mensuel",
+                "Montant €": res.brut_mensuel,
+                "Part du brut": ratio_to_brut(res.brut_mensuel),
+            },
+            {
+                "Poste": "Net imposable",
+                "Montant €": res.net_imposable,
+                "Part du brut": ratio_to_brut(res.net_imposable),
+            },
+            {
+                "Poste": "Net à payer",
+                "Montant €": res.net_a_payer,
+                "Part du brut": ratio_to_brut(res.net_a_payer),
+            },
+            {
+                "Poste": "Cotisations salarié (hors CSG/CRDS)",
+                "Montant €": res.total_cot_sal_hors_csg,
+                "Part du brut": ratio_to_brut(res.total_cot_sal_hors_csg),
+            },
+            {
+                "Poste": "CSG déductible",
+                "Montant €": res.csg_deductible,
+                "Part du brut": ratio_to_brut(res.csg_deductible),
+            },
+            {
+                "Poste": "CSG non déductible",
+                "Montant €": res.csg_non_deductible,
+                "Part du brut": ratio_to_brut(res.csg_non_deductible),
+            },
+            {
+                "Poste": "CRDS",
+                "Montant €": res.crds,
+                "Part du brut": ratio_to_brut(res.crds),
+            },
+            {
+                "Poste": "Cotisations salarié (total)",
+                "Montant €": cotisations_salarie_totales,
+                "Part du brut": ratio_to_brut(cotisations_salarie_totales),
+            },
+            {
+                "Poste": "Charges employeur",
+                "Montant €": res.total_charges_employeur,
+                "Part du brut": ratio_to_brut(res.total_charges_employeur),
+            },
+            {
+                "Poste": "Coût total employeur",
+                "Montant €": res.cout_total_employeur,
+                "Part du brut": ratio_to_brut(res.cout_total_employeur),
+            },
+        ]
+    )
+
     sal_df = pd.DataFrame(
         {
             "Poste": [
@@ -386,9 +482,7 @@ def page_brut_net():
             ],
         }
     )
-    st.dataframe(sal_df.style.format({"Montant €": "{:,.2f}"}))
 
-    st.markdown("### Détail employeur")
     emp_df = pd.DataFrame(
         {
             "Poste": [
@@ -425,11 +519,21 @@ def page_brut_net():
             ],
         }
     )
-    st.dataframe(emp_df.style.format({"Montant €": "{:,.2f}"}))
+
+    tabs = st.tabs(["Résumé détaillé", "Cotisations salarié", "Cotisations employeur"])
+    with tabs[0]:
+        st.dataframe(
+            resume_df.style.format({"Montant €": "{:,.2f}", "Part du brut": "{:.1%}"}),
+            hide_index=True,
+        )
+    with tabs[1]:
+        st.dataframe(sal_df.style.format({"Montant €": "{:,.2f}"}), hide_index=True)
+    with tabs[2]:
+        st.dataframe(emp_df.style.format({"Montant €": "{:,.2f}"}), hide_index=True)
 
     st.markdown("### Export")
     export_dict = {
-        **resume,
+        **{k: round(v, 2) for k, v in resume_df.set_index("Poste")["Montant €"].items()},
         **{f"Salarié | {k}": v for k, v in zip(sal_df["Poste"], sal_df["Montant €"])},
         **{f"Employeur | {k}": v for k, v in zip(emp_df["Poste"], emp_df["Montant €"])},
         "Base T1": res.base_T1,
