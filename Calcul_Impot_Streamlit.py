@@ -635,22 +635,47 @@ def page_information():
         return 0.0
 
     # --- Données pour les courbes ---
-    revenus_bruts_m = np.linspace(1000, 15000, 500)
-    revenus_bruts_a = revenus_bruts_m * 12
-    revenus_nets_a = revenus_bruts_a * 0.77
-    revenus_nets_m = revenus_nets_a / 12
+    quotients_annuels = np.linspace(0.7, 1.3, 400) * quotient_familial
+    quotients_mensuels = quotients_annuels / 12
 
-    impots_a = np.array([calc_imp(r)[0] for r in revenus_nets_a])
-    taux_eff = impots_a / revenus_nets_a
-    taux_marg_arr = np.array([tx_marg(r) for r in revenus_nets_a])
-    taux_nom = impots_a / revenus_bruts_a
+    impots_par_part = np.array([calc_imp(r)[0] for r in quotients_annuels])
+    impots_totaux = impots_par_part * nombre_parts
+
+    revenus_totaux_apres_aide = quotients_annuels * nombre_parts
+    deduction_aide = sim["details"].get("Déduction pour aides et dons", 0.0)
+    revenus_totaux_avant_aide = revenus_totaux_apres_aide + deduction_aide
+
+    taux_eff = np.divide(
+        impots_totaux,
+        revenus_totaux_apres_aide,
+        out=np.zeros_like(impots_totaux),
+        where=revenus_totaux_apres_aide > 0,
+    )
+    taux_marg_arr = np.array([tx_marg(r) for r in quotients_annuels])
+    taux_nom = np.divide(
+        impots_totaux,
+        revenus_totaux_avant_aide,
+        out=np.zeros_like(impots_totaux),
+        where=revenus_totaux_avant_aide > 0,
+    )
 
     # --- Données ciblées à partir de la simulation ---
-    impot_cible, details = calc_imp(quotient_familial)
-    rba = quotient_familial / 0.77
-    te_c = (impot_cible / quotient_familial) * 100
+    impot_cible_par_part, details = calc_imp(quotient_familial)
+    impot_cible_total = impot_cible_par_part * nombre_parts
+    revenu_total_apres_aide = revenu_imposable_apres_aide
+    revenu_total_avant_aide = revenu_total_apres_aide + deduction_aide
+
+    te_c = (
+        (impot_cible_total / revenu_total_apres_aide) * 100
+        if revenu_total_apres_aide > 0
+        else 0.0
+    )
     tm_c = tx_marg(quotient_familial) * 100
-    tn_c = (impot_cible / rba) * 100
+    tn_c = (
+        (impot_cible_total / revenu_total_avant_aide) * 100
+        if revenu_total_avant_aide > 0
+        else 0.0
+    )
 
     # --- Tracé des courbes ---
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -658,18 +683,23 @@ def page_information():
     for (b, h, _), c in zip(bareme, couleurs):
         ax.axvspan(b / 12, h / 12, facecolor=c, alpha=0.3)
 
-    ax.plot(revenus_nets_m, taux_eff * 100, label="Taux effectif", linewidth=2)
-    ax.plot(revenus_nets_m, taux_marg_arr * 100, '--', label="Taux marginal")
-    ax.plot(revenus_nets_m, taux_nom * 100, ':', label="Taux nominal")
+    ax.plot(quotients_mensuels, taux_eff * 100, label="Taux effectif", linewidth=2)
+    ax.plot(quotients_mensuels, taux_marg_arr * 100, '--', label="Taux marginal")
+    ax.plot(quotients_mensuels, taux_nom * 100, ':', label="Taux nominal")
 
     ax.axvline(x=quotient_mensuel, color='red', linestyle='--')
     ax.plot(quotient_mensuel, te_c, 'ro', label=f"Votre position ({quotient_mensuel:.0f} €)")
 
-    ax.annotate(f"{te_c:.1f}%", 
-                xy=(quotient_mensuel, te_c),
-                xytext=(quotient_mensuel + 200, te_c + 2),
-                arrowprops=dict(arrowstyle="->", color='red'),
-                fontsize=10, color='red')
+    annotation = f"TE: {te_c:.1f}%\nTM: {tm_c:.1f}%\nTN: {tn_c:.1f}%"
+    ax.annotate(
+        annotation,
+        xy=(quotient_mensuel, te_c),
+        xytext=(quotient_mensuel + 200, te_c + 5),
+        arrowprops=dict(arrowstyle="->", color='red'),
+        fontsize=10,
+        color='red',
+        bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="red", alpha=0.8),
+    )
 
     ax.set_xlabel("Quotient familial mensuel (€)")
     ax.set_ylabel("Taux (%)")
@@ -686,8 +716,9 @@ def page_information():
 - **Nombre de parts** : {nombre_parts:.2f}
 - **Quotient familial annuel** : {quotient_familial:.0f} €
 - **Quotient familial mensuel** : {quotient_mensuel:.0f} €
-- **Revenu brut estimé équivalent** : {rba:.0f} €
-- **Impôt annuel (sur 1 part)** : {impot_cible:.0f} €
+- **Revenu imposable total (avant aides)** : {revenu_total_avant_aide:.0f} €
+- **Impôt annuel (sur 1 part)** : {impot_cible_par_part:.0f} €
+- **Impôt annuel total** : {impot_cible_total:.0f} €
 - **Taux effectif** : {te_c:.1f} %
 - **Taux marginal** : {tm_c:.1f} %
 - **Taux nominal** : {tn_c:.1f} %
