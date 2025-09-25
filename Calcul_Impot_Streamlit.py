@@ -634,6 +634,21 @@ def page_information():
                 return tx
         return 0.0
 
+    st.markdown("### 🔧 Ajustez votre revenu imposable simulé")
+    variation_pct = st.slider(
+        "Variation du revenu imposable (%)",
+        min_value=-20.0,
+        max_value=20.0,
+        value=0.0,
+        step=1.0,
+        format="%+.0f%%",
+        help="Ajustez votre revenu imposable pour visualiser l'impact sur l'impôt."
+    )
+
+    revenu_imposable_ajuste = revenu_imposable_apres_aide * (1 + variation_pct / 100)
+    quotient_familial_ajuste = revenu_imposable_ajuste / nombre_parts
+    quotient_mensuel_ajuste = quotient_familial_ajuste / 12
+
     # --- Données pour les courbes ---
     quotients_annuels = np.linspace(0.7, 1.3, 400) * quotient_familial
     quotients_mensuels = quotients_annuels / 12
@@ -677,6 +692,53 @@ def page_information():
         else 0.0
     )
 
+    impot_ajuste_par_part, _ = calc_imp(quotient_familial_ajuste)
+    impot_ajuste_total = impot_ajuste_par_part * nombre_parts
+    revenu_total_apres_aide_ajuste = revenu_imposable_ajuste
+    revenu_total_avant_aide_ajuste = revenu_total_apres_aide_ajuste + deduction_aide
+
+    te_ajuste = (
+        (impot_ajuste_total / revenu_total_apres_aide_ajuste) * 100
+        if revenu_total_apres_aide_ajuste > 0
+        else 0.0
+    )
+    tm_ajuste = tx_marg(quotient_familial_ajuste) * 100
+    tn_ajuste = (
+        (impot_ajuste_total / revenu_total_avant_aide_ajuste) * 100
+        if revenu_total_avant_aide_ajuste > 0
+        else 0.0
+    )
+
+    def distance_prochaine_tranche(quotient):
+        for _, haut, _ in bareme:
+            if quotient < haut:
+                if np.isinf(haut):
+                    return None
+                return haut - quotient
+        return None
+
+    distance_initiale = distance_prochaine_tranche(quotient_familial)
+    distance_ajustee = distance_prochaine_tranche(quotient_familial_ajuste)
+
+    st.caption(
+        f"Revenu imposable ajusté : {revenu_imposable_ajuste:.0f} € "
+        f"(variation de {variation_pct:+.0f} %)."
+    )
+
+    col_impot, col_te, col_tm, col_tn, col_tranche = st.columns(5)
+    col_impot.metric(
+        "Impôt total ajusté",
+        f"{impot_ajuste_total:.0f} €",
+    )
+    col_te.metric("Taux effectif ajusté", f"{te_ajuste:.1f} %")
+    col_tm.metric("Taux marginal ajusté", f"{tm_ajuste:.1f} %")
+    col_tn.metric("Taux nominal ajusté", f"{tn_ajuste:.1f} %")
+    if distance_ajustee is None:
+        distance_text = "Tranche maximale atteinte"
+    else:
+        distance_text = f"{distance_ajustee:.0f} €"
+    col_tranche.metric("Distance avant prochaine tranche", distance_text)
+
     # --- Tracé des courbes ---
     fig, ax = plt.subplots(figsize=(10, 6))
     couleurs = ['#e0f7fa','#b2ebf2','#80deea','#4dd0e1','#26c6da']
@@ -690,6 +752,15 @@ def page_information():
     ax.axvline(x=quotient_mensuel, color='red', linestyle='--')
     ax.plot(quotient_mensuel, te_c, 'ro', label=f"Votre position ({quotient_mensuel:.0f} €)")
 
+    ax.axvline(x=quotient_mensuel_ajuste, color='#8e44ad', linestyle='-.')
+    ax.plot(
+        quotient_mensuel_ajuste,
+        te_ajuste,
+        'o',
+        color='#8e44ad',
+        label=f"Situation ajustée ({quotient_mensuel_ajuste:.0f} €)",
+    )
+
     annotation = f"TE: {te_c:.1f}%\nTM: {tm_c:.1f}%\nTN: {tn_c:.1f}%"
     ax.annotate(
         annotation,
@@ -699,6 +770,17 @@ def page_information():
         fontsize=10,
         color='red',
         bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="red", alpha=0.8),
+    )
+
+    annotation_ajuste = f"TE: {te_ajuste:.1f}%\nTM: {tm_ajuste:.1f}%\nTN: {tn_ajuste:.1f}%"
+    ax.annotate(
+        annotation_ajuste,
+        xy=(quotient_mensuel_ajuste, te_ajuste),
+        xytext=(quotient_mensuel_ajuste + 200, te_ajuste + 5),
+        arrowprops=dict(arrowstyle="->", color='#8e44ad'),
+        fontsize=10,
+        color='#8e44ad',
+        bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#8e44ad", alpha=0.8),
     )
 
     ax.set_xlabel("Quotient familial mensuel (€)")
@@ -723,6 +805,41 @@ def page_information():
 - **Taux marginal** : {tm_c:.1f} %
 - **Taux nominal** : {tn_c:.1f} %
 """)
+
+    st.markdown("### 🔍 Différences entre la situation initiale et ajustée")
+    delta_impot = impot_ajuste_total - impot_cible_total
+    delta_te = te_ajuste - te_c
+    delta_tm = tm_ajuste - tm_c
+    delta_tn = tn_ajuste - tn_c
+    delta_tranche = None
+    if distance_initiale is not None and distance_ajustee is not None:
+        delta_tranche = distance_ajustee - distance_initiale
+
+    def format_delta(val, suffix="", precision=1, tolerance=0.05):
+        if val is None:
+            return "N/A"
+        signe = "+" if val > 0 else ""
+        if abs(val) < tolerance:
+            return f"≈ 0{suffix}"
+        if isinstance(val, (int, float, np.floating)):
+            return f"{signe}{val:.{precision}f}{suffix}"
+        return f"{signe}{val}{suffix}"
+
+    st.info(
+        "\n".join(
+            [
+                f"• Impôt total : {format_delta(delta_impot, ' €', precision=0, tolerance=1)}",
+                f"• Taux effectif : {format_delta(delta_te, ' %')}",
+                f"• Taux marginal : {format_delta(delta_tm, ' %')}",
+                f"• Taux nominal : {format_delta(delta_tn, ' %')}",
+                (
+                    f"• Distance avant prochaine tranche : {format_delta(delta_tranche, ' €', precision=0, tolerance=1)}"
+                    if delta_tranche is not None
+                    else "• Distance avant prochaine tranche : variation non applicable"
+                ),
+            ]
+        )
+    )
 
     with st.expander("📊 Détail par tranche appliquée à votre quotient familial"):
         for bas, haut, tr, tx, mnt in details:
