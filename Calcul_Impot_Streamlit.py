@@ -1202,9 +1202,21 @@ menu_pages = [
     "Étape 3 : Visualisation",
     "Étape 4 : Capacité d'emprunt",
 ]
-if st.session_state.get("page") not in menu_pages:
-    st.session_state["page"] = menu_pages[0]
-page = st.sidebar.radio("", menu_pages, key="page")
+current_page = st.session_state.get("page")
+if current_page not in menu_pages:
+    current_page = menu_pages[0]
+    st.session_state["page"] = current_page
+
+selected_page = st.sidebar.radio(
+    "",
+    menu_pages,
+    index=menu_pages.index(current_page),
+)
+
+if selected_page != current_page:
+    st.session_state["page"] = selected_page
+
+page = st.session_state["page"]
 
 if page == "Étape 1 : Brut → Net":
     page_brut_net()
