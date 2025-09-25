@@ -10,11 +10,11 @@ st.set_page_config(page_title="Simulations financières 2025", layout="centered"
 
 st.sidebar.markdown("---")
 st.sidebar.caption("🛠️ Développé par **I. Bitar**")
-st.sidebar.caption("📅 Dernière mise à jour : **9 mai 2025**")
-st.sidebar.caption("🔢 Version : **v1.0.0**")
+st.sidebar.caption("📅 Dernière mise à jour : **25 septembre 2025**")
+st.sidebar.caption("🔢 Version : **v1.1.0**")
 
 st.markdown("---")
-st.caption("🛠️ Développé par **I. Bitar** · 📅 Dernière mise à jour : **9 mai 2025** · 🔢 Version : **v1.0.0**")
+st.caption("🛠️ Développé par **I. Bitar** · 📅 Dernière mise à jour : **25 septembre 2025** · 🔢 Version : **v1.1.0**")
 
 # ---------- PARAMÈTRES 2025 (Brut → Net cadre) ----------
 PMSS = 3925.0           # Plafond Mensuel Sécurité sociale (PASS mensuel) 2025
