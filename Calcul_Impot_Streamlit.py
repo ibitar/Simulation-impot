@@ -841,9 +841,88 @@ def page_information():
         )
     )
 
+    def progression_tranche(quotient):
+        for idx, (bas, haut, _) in enumerate(bareme):
+            if quotient >= bas:
+                if np.isinf(haut):
+                    return {
+                        "index": idx,
+                        "bas": bas,
+                        "haut": haut,
+                        "avance": quotient - bas,
+                        "reste": None,
+                        "largeur": None,
+                    }
+                if quotient <= haut:
+                    return {
+                        "index": idx,
+                        "bas": bas,
+                        "haut": haut,
+                        "avance": quotient - bas,
+                        "reste": haut - quotient,
+                        "largeur": haut - bas,
+                    }
+        return None
+
+    tranche_courante = progression_tranche(quotient_familial)
+    if tranche_courante and tranche_courante["reste"] is not None:
+        ratio = tranche_courante["avance"] / tranche_courante["largeur"] if tranche_courante["largeur"] else 0
+        ratio = min(max(ratio, 0.0), 1.0)
+        plafond = tranche_courante["haut"]
+        plafond_texte = f"{plafond:,.0f} €".replace(",", " ")
+        reste_texte = f"{tranche_courante['reste']:.0f} €".replace(",", " ")
+        st.progress(
+            ratio,
+            text=(
+                "Il reste "
+                f"{reste_texte} avant d'atteindre la tranche suivante "
+                f"({plafond_texte})."
+            ),
+        )
+    elif tranche_courante:
+        st.info("Vous êtes déjà dans la tranche supérieure du barème (taux maximal appliqué).")
+
     with st.expander("📊 Détail par tranche appliquée à votre quotient familial"):
-        for bas, haut, tr, tx, mnt in details:
-            st.markdown(f"- De {bas:.0f} € à {haut:.0f} € : {tr:.0f} € × {int(tx*100)}% = {mnt:.0f} €")
+        if details:
+            donnees_tranches = []
+            for idx, (bas, _, tr, tx, mnt) in enumerate(details):
+                haut_theorique = bareme[idx][1]
+                libelle_haut = "∞" if np.isinf(haut_theorique) else f"{haut_theorique:,.0f} €"
+                donnees_tranches.append(
+                    {
+                        "Tranche": f"{bas:,.0f} € – {libelle_haut}",
+                        "Base imposable (€)": tr,
+                        "Taux": tx,
+                        "Montant de l'impôt (€)": mnt,
+                        "Part de l'impôt": (
+                            mnt / impot_cible_par_part if impot_cible_par_part > 0 else 0.0
+                        ),
+                    }
+                )
+
+            df_tranches = pd.DataFrame(donnees_tranches)
+
+            style_tranches = (
+                df_tranches.style.format(
+                    {
+                        "Base imposable (€)": lambda x: f"{x:,.0f} €".replace(",", " "),
+                        "Taux": "{:.1%}",
+                        "Montant de l'impôt (€)": lambda x: f"{x:,.0f} €".replace(",", " "),
+                        "Part de l'impôt": "{:.1%}",
+                    }
+                )
+                .background_gradient(subset=["Part de l'impôt"], cmap="Blues")
+                .set_properties(subset=["Tranche"], **{"font-weight": "bold"})
+            )
+
+            st.dataframe(style_tranches, use_container_width=True)
+        else:
+            st.info("Aucune tranche imposable n'a été appliquée pour cette simulation.")
+
+        st.caption(
+            "ℹ️ Chaque montant correspond à l'impôt payé dans la tranche considérée. "
+            "La part de l'impôt indique la contribution relative de la tranche au total (par part)."
+        )
 
 def page_credit():
     st.title("🏠 Simulation Capacité d'Emprunt")
