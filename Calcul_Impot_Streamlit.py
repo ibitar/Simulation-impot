@@ -105,6 +105,17 @@ class ResultatSalaire:
     cout_total_employeur: float
 
 
+def navigate_to_page(page_label: str) -> None:
+    """Met à jour la page active dans la session et force un rafraîchissement."""
+
+    st.session_state["page"] = page_label
+    rerun = getattr(st, "rerun", None)
+    if callable(rerun):
+        rerun()
+    else:  # Compatibilité avec les versions plus anciennes de Streamlit
+        st.experimental_rerun()
+
+
 def calcul_brut_net_mensuel(
     brut_mensuel: float,
     *,
@@ -442,7 +453,7 @@ def page_brut_net():
             " simulation d'impôt."
         )
 
-    if st.button("Utiliser dans la simulation"):
+    if st.button("Utiliser dans la simulation", key="use_in_simulation"):
         st.session_state["revenu_net_imposable_annuel"] = net_imposable_annuel
         st.session_state["revenu_net_imposable_mensuel"] = net_imposable_mensuel
         st.session_state["net_a_payer_annuel"] = net_a_payer_annuel
@@ -452,8 +463,17 @@ def page_brut_net():
             "brut_net_ready_version"
         )
         st.session_state["rev"] = net_imposable_annuel
-        st.session_state["page"] = "Simulation"
+        st.session_state["page"] = "Étape 2 : Simulation d'impôt"
         st.success("✅ Montants transférés vers la simulation d'impôt.")
+
+    st.markdown("### 🚀 Étape suivante")
+    st.caption("Passez à la simulation d'impôt pour exploiter le net calculé ci-dessus.")
+    if st.button(
+        "➡️ Étape 2 : Lancer la simulation d'impôt",
+        type="primary",
+        key="cta_brut_to_simulation",
+    ):
+        navigate_to_page("Étape 2 : Simulation d'impôt")
 
     st.markdown("---")
     st.markdown("**Notes importantes**")
@@ -484,7 +504,7 @@ if "simulation" not in st.session_state:
     st.session_state["simulation"] = None
 
 if "page" not in st.session_state:
-    st.session_state["page"] = "Simulation"
+    st.session_state["page"] = "Étape 1 : Brut → Net"
 
 # --- Fonction de calcul d'impôt (inchangée) ---
 # Fonction de calcul d'impôt
@@ -677,6 +697,15 @@ def simulation_page():
                 mime="text/html"
             )
 
+        st.markdown("### 🚀 Étape suivante")
+        st.caption("Visualisez graphiquement l'impact de votre simulation sur les taux d'imposition.")
+        if st.button(
+            "➡️ Étape 3 : Explorer la visualisation",
+            type="primary",
+            key="cta_simulation_to_visualisation",
+        ):
+            navigate_to_page("Étape 3 : Visualisation")
+
 # --- Fonction pour la page d’Information ---
 def page_information():
     st.title("📊 Visualisation des taux 2025 selon votre situation simulée")
@@ -684,6 +713,11 @@ def page_information():
     sim = st.session_state.get("simulation")
     if not sim:
         st.warning("Aucune simulation enregistrée. Veuillez d'abord remplir la page de simulation.")
+        if st.button(
+            "⬅️ Revenir à l'étape 2 : Simulation d'impôt",
+            key="cta_visualisation_back_to_simulation",
+        ):
+            navigate_to_page("Étape 2 : Simulation d'impôt")
         return
 
     # --- Récupération des données de la simulation ---
@@ -1010,6 +1044,15 @@ def page_information():
             "La part de l'impôt indique la contribution relative de la tranche au total (par part)."
         )
 
+    st.markdown("### 🚀 Étape suivante")
+    st.caption("Estimez votre capacité d'emprunt en utilisant le revenu net issu de la simulation.")
+    if st.button(
+        "➡️ Étape 4 : Calculer la capacité d'emprunt",
+        type="primary",
+        key="cta_visualisation_to_credit",
+    ):
+        navigate_to_page("Étape 4 : Capacité d'emprunt")
+
 def page_credit():
     st.title("🏠 Simulation Capacité d'Emprunt")
 
@@ -1028,6 +1071,11 @@ def page_credit():
             min_value=0.0,
             step=100.0
         )
+        if st.button(
+            "⬅️ Revenir à l'étape 2 : Simulation d'impôt",
+            key="cta_credit_back_to_simulation",
+        ):
+            navigate_to_page("Étape 2 : Simulation d'impôt")
 
     # Charges existantes
     st.header("Vos charges existantes")
@@ -1116,26 +1164,54 @@ def page_credit():
             f"votre capacité d'emprunt est estimée à environ **{capital_max:,.0f} €** "
             f"avec une mensualité de **{capacite_mensuelle:,.0f} €**."
         )
+
+        st.markdown("### 🔁 Aller plus loin")
+        st.caption("Ajustez votre situation en recalculant le net ou relancez une simulation complète.")
+        if st.button(
+            "🔁 Revenir à l'étape 1 : Brut → Net",
+            type="secondary",
+            key="cta_credit_restart",
+        ):
+            navigate_to_page("Étape 1 : Brut → Net")
     else:
         st.warning("Veuillez saisir vos revenus ou effectuer d'abord la simulation.")
+        if st.button(
+            "➡️ Aller à l'étape 1 pour calculer votre net",
+            key="cta_credit_to_brut",
+        ):
+            navigate_to_page("Étape 1 : Brut → Net")
 
 
 # --- Barre latérale de navigation simplifiée ---
 st.sidebar.title("Menu")
+st.sidebar.markdown(
+    """
+    ### 🧭 Parcours guidé
+    1. **Étape 1** : Brut → Net – calculez un revenu net de référence.
+    2. **Étape 2** : Simulation d'impôt – utilisez ou ajustez ce revenu.
+    3. **Étape 3** : Visualisation – nécessite une simulation enregistrée.
+    4. **Étape 4** : Capacité d'emprunt – exploite le revenu simulé.
+    """
+)
+st.sidebar.caption(
+    "ℹ️ Les étapes 3 et 4 s'activent pleinement après avoir enregistré une simulation d'impôt."
+)
 menu_pages = [
-    "Simulation",
-    "Page d'information",
-    "Capacité d'emprunt",
-    "Brut → Net cadre",
+    "Étape 1 : Brut → Net",
+    "Étape 2 : Simulation d'impôt",
+    "Étape 3 : Visualisation",
+    "Étape 4 : Capacité d'emprunt",
 ]
+if st.session_state.get("page") not in menu_pages:
+    st.session_state["page"] = menu_pages[0]
 page = st.sidebar.radio("", menu_pages, key="page")
 
-if page == "Simulation":
-    simulation_page()
-elif page == "Page d'information":
-    page_information()
-elif page == "Capacité d'emprunt":
-    page_credit()
-elif page == "Brut → Net cadre":
+if page == "Étape 1 : Brut → Net":
     page_brut_net()
+elif page == "Étape 2 : Simulation d'impôt":
+    simulation_page()
+elif page == "Étape 3 : Visualisation":
+    page_information()
+elif page == "Étape 4 : Capacité d'emprunt":
+    page_credit()
 
