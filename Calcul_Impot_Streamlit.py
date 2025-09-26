@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import pandas as pd
 from dataclasses import dataclass
 from datetime import datetime
@@ -965,9 +966,28 @@ def page_information():
 
     # --- Tracé des courbes ---
     fig, ax = plt.subplots(figsize=(10, 6))
-    couleurs = ['#e0f7fa','#b2ebf2','#80deea','#4dd0e1','#26c6da']
-    for (b, h, _), c in zip(bareme, couleurs):
-        ax.axvspan(b / 12, h / 12, facecolor=c, alpha=0.3)
+    couleurs = ['#e0f7fa', '#b2ebf2', '#80deea', '#4dd0e1', '#26c6da']
+
+    def format_euro(val: float) -> str:
+        return f"{val:,.0f} €".replace(",", " ")
+
+    max_quotient_mensuel = quotients_mensuels.max()
+    tranche_patches = []
+    for idx, ((b, h, t), c) in enumerate(zip(bareme, couleurs), start=1):
+        xmax = (h / 12) if np.isfinite(h) else max_quotient_mensuel
+        ax.axvspan(b / 12, xmax, facecolor=c, alpha=0.3)
+        if np.isfinite(h):
+            tranche_label = (
+                f"Tranche {idx} : {format_euro(b)} – {format_euro(h)} "
+                f"({t * 100:.0f} %)"
+            )
+        else:
+            tranche_label = (
+                f"Tranche {idx} : ≥ {format_euro(b)} ({t * 100:.0f} %)"
+            )
+        tranche_patches.append(
+            Patch(facecolor=c, edgecolor='none', alpha=0.3, label=tranche_label)
+        )
 
     ax.plot(quotients_mensuels, taux_eff * 100, label="Taux effectif", linewidth=2)
     ax.plot(quotients_mensuels, taux_marg_arr * 100, '--', label="Taux marginal")
@@ -1011,7 +1031,16 @@ def page_information():
     ax.set_ylabel("Taux (%)")
     ax.set_title("Taux d'imposition 2025 selon votre quotient familial")
     ax.grid(True)
-    ax.legend(loc="lower right")
+
+    handles, _ = ax.get_legend_handles_labels()
+    legend_handles = handles + tranche_patches
+    ax.legend(
+        handles=legend_handles,
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+        frameon=True,
+    )
+    fig.tight_layout()
     st.pyplot(fig)
 
     # --- Analyse texte ---
