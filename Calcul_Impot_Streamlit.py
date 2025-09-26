@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+from matplotlib.ticker import FuncFormatter
 import pandas as pd
 from dataclasses import dataclass
 from datetime import datetime
@@ -877,11 +878,12 @@ def page_information():
     # --- Données pour les courbes ---
     quotients_annuels = np.linspace(0.7, 1.3, 400) * quotient_familial
     quotients_mensuels = quotients_annuels / 12
+    revenus_imposables_totaux_annuels = quotients_annuels * nombre_parts
 
     impots_par_part = np.array([calc_imp(r)[0] for r in quotients_annuels])
     impots_totaux = impots_par_part * nombre_parts
 
-    revenus_totaux_apres_aide = quotients_annuels * nombre_parts
+    revenus_totaux_apres_aide = revenus_imposables_totaux_annuels
     deduction_aide = sim["details"].get("Déduction pour aides et dons", 0.0)
     revenus_totaux_avant_aide = revenus_totaux_apres_aide + deduction_aide
 
@@ -1029,8 +1031,18 @@ def page_information():
 
     ax.set_xlabel("Quotient familial mensuel (€)")
     ax.set_ylabel("Taux (%)")
-    ax.set_title("Taux d'imposition 2025 selon votre quotient familial")
+    ax.set_title(
+        "Taux d'imposition 2025 selon votre quotient familial "
+        "(axe supérieur : revenu imposable total annuel)"
+    )
     ax.grid(True)
+
+    quotient_ticks = ax.get_xticks()
+    ax2 = ax.twiny()
+    ax2.set_xlim(np.array(ax.get_xlim()) * 12 * nombre_parts)
+    ax2.set_xticks(quotient_ticks * 12 * nombre_parts)
+    ax2.set_xlabel("Revenu imposable total annuel (€)")
+    ax2.xaxis.set_major_formatter(FuncFormatter(lambda val, _: format_euro(val)))
 
     handles, _ = ax.get_legend_handles_labels()
     legend_handles = handles + tranche_patches
