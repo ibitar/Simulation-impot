@@ -6,9 +6,13 @@ from matplotlib.ticker import FuncFormatter
 import pandas as pd
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
 # --- Pied de page / Informations version ---
 st.set_page_config(page_title="Simulations financières 2025", layout="centered")
+
+if "auto_progression_enabled" not in st.session_state:
+    st.session_state["auto_progression_enabled"] = True
 
 st.sidebar.markdown("---")
 st.sidebar.caption("🛠️ Développé par **I. Bitar**")
@@ -105,6 +109,32 @@ class ResultatSalaire:
     csa: float
     total_charges_employeur: float
     cout_total_employeur: float
+
+
+def transfer_brut_net_to_simulation(
+    *,
+    net_imposable_annuel: float,
+    net_imposable_mensuel: float,
+    net_a_payer_annuel: float,
+    net_a_payer_mensuel: float,
+    version: Optional[int] = None,
+    auto_trigger: bool = False,
+) -> None:
+    """Stocke dans la session les valeurs issues du calcul brut → net."""
+
+    st.session_state["revenu_net_imposable_annuel"] = net_imposable_annuel
+    st.session_state["revenu_net_imposable_mensuel"] = net_imposable_mensuel
+    st.session_state["net_a_payer_annuel"] = net_a_payer_annuel
+    st.session_state["net_a_payer_mensuel"] = net_a_payer_mensuel
+    st.session_state["revenu_net_source"] = "brut_net"
+    st.session_state["brut_net_applied_version"] = st.session_state.get(
+        "brut_net_ready_version"
+    )
+    st.session_state["rev"] = net_imposable_annuel
+    if version is not None:
+        st.session_state["brut_net_autoprogress_version"] = version
+    if auto_trigger:
+        st.session_state["auto_transfer_notif"] = True
 
 
 def navigate_to_page(page_label: str) -> None:
@@ -304,6 +334,9 @@ def page_brut_net():
         chomage_apres_mai_2025=chomage_mai,
     )
 
+    st.session_state["brut_mensuel_calcule"] = res.brut_mensuel
+    st.session_state["brut_annuel_calcule"] = res.brut_mensuel * 12
+
     net_imposable_mensuel = res.net_imposable
     net_imposable_annuel = res.net_imposable * 12
     net_a_payer_mensuel = res.net_a_payer
@@ -337,6 +370,20 @@ def page_brut_net():
                 st.session_state.pop("rev", None)
                 st.session_state["revenu_net_source"] = "brut_net_stale"
             st.session_state["brut_net_applied_version"] = None
+
+        if st.session_state.get("auto_progression_enabled", False):
+            autoprogress_version = st.session_state.get("brut_net_autoprogress_version")
+            if autoprogress_version != new_version:
+                transfer_brut_net_to_simulation(
+                    net_imposable_annuel=net_imposable_annuel,
+                    net_imposable_mensuel=net_imposable_mensuel,
+                    net_a_payer_annuel=net_a_payer_annuel,
+                    net_a_payer_mensuel=net_a_payer_mensuel,
+                    version=new_version,
+                    auto_trigger=True,
+                )
+                navigate_to_page("Étape 2 : Simulation d'impôt")
+                return
 
     def format_euro(value: float) -> str:
         return f"{value:,.2f}".replace(",", " ").replace(".", ",") + " €"
@@ -677,17 +724,15 @@ def page_brut_net():
         )
 
     if st.button("Utiliser dans la simulation", key="use_in_simulation"):
-        st.session_state["revenu_net_imposable_annuel"] = net_imposable_annuel
-        st.session_state["revenu_net_imposable_mensuel"] = net_imposable_mensuel
-        st.session_state["net_a_payer_annuel"] = net_a_payer_annuel
-        st.session_state["net_a_payer_mensuel"] = net_a_payer_mensuel
-        st.session_state["revenu_net_source"] = "brut_net"
-        st.session_state["brut_net_applied_version"] = st.session_state.get(
-            "brut_net_ready_version"
+        transfer_brut_net_to_simulation(
+            net_imposable_annuel=net_imposable_annuel,
+            net_imposable_mensuel=net_imposable_mensuel,
+            net_a_payer_annuel=net_a_payer_annuel,
+            net_a_payer_mensuel=net_a_payer_mensuel,
+            version=st.session_state.get("brut_net_ready_version"),
         )
-        st.session_state["rev"] = net_imposable_annuel
-        st.session_state["page"] = "Étape 2 : Simulation d'impôt"
-        st.success("✅ Montants transférés vers la simulation d'impôt.")
+        st.session_state["manual_transfer_notif"] = True
+        navigate_to_page("Étape 2 : Simulation d'impôt")
 
     st.markdown("### 🚀 Étape suivante")
     st.caption("Passez à la simulation d'impôt pour exploiter le net calculé ci-dessus.")
@@ -842,6 +887,31 @@ def generate_html_report(result_dict):
 def simulation_page():
     st.title("Simulation d'Impôt")
 
+    auto_transfer = st.session_state.pop("auto_transfer_notif", False)
+    manual_transfer = st.session_state.pop("manual_transfer_notif", False)
+    if auto_transfer:
+        st.info(
+            "✅ Les montants issus de l'étape 1 ont été transférés automatiquement dans la "
+            "simulation. Vous pouvez les ajuster avant de lancer le calcul."
+        )
+    elif manual_transfer:
+        st.success(
+            "✅ Les montants issus de l'étape 1 sont prêts pour la simulation. Vous pouvez "
+            "les modifier si nécessaire."
+        )
+
+    brut_mensuel_calcule = st.session_state.get("brut_mensuel_calcule")
+    brut_annuel_calcule = st.session_state.get("brut_annuel_calcule")
+
+    def format_euro(value: float) -> str:
+        return f"{value:,.2f} €".replace(",", " ").replace(".", ",")
+
+    if brut_mensuel_calcule is not None and brut_annuel_calcule is not None:
+        st.subheader("Références importées de l'étape 1")
+        col_brut_m, col_brut_a = st.columns(2)
+        col_brut_m.metric("Salaire brut mensuel", format_euro(brut_mensuel_calcule))
+        col_brut_a.metric("Salaire brut annuel", format_euro(brut_annuel_calcule))
+
     # Inputs
     revenu_importe = st.session_state.get("revenu_net_imposable_annuel")
     valeur_defaut_revenu = revenu_importe if revenu_importe is not None else 0.0
@@ -882,6 +952,15 @@ def simulation_page():
             revenu_salarial, ca_auto, parts, red, aide, garde, couple
         )
         st.success("✅ Simulation enregistrée !")
+        version = st.session_state.get("simulation_version", 0) + 1
+        st.session_state["simulation_version"] = version
+        if st.session_state.get("auto_progression_enabled", False):
+            autoprogress_version = st.session_state.get("simulation_autoprogress_version")
+            if autoprogress_version != version:
+                st.session_state["simulation_autoprogress_version"] = version
+                st.session_state["auto_visualisation_notif"] = True
+                navigate_to_page("Étape 3 : Visualisation")
+                return
 
     result = st.session_state.get("simulation")
     if result:
@@ -932,6 +1011,12 @@ def simulation_page():
 # --- Fonction pour la page d’Information ---
 def page_information():
     st.title("📊 Visualisation des taux 2025 selon votre situation simulée")
+
+    if st.session_state.pop("auto_visualisation_notif", False):
+        st.info(
+            "✅ La visualisation s'est ouverte automatiquement après votre dernière "
+            "simulation. Naviguez librement pour affiner vos paramètres."
+        )
 
     sim = st.session_state.get("simulation")
     if not sim:
@@ -1458,6 +1543,17 @@ st.sidebar.markdown(
 st.sidebar.caption(
     "ℹ️ Les étapes 3 et 4 s'activent pleinement après avoir enregistré une simulation d'impôt."
 )
+st.sidebar.markdown("---")
+st.sidebar.checkbox(
+    "Progression automatique des étapes",
+    value=st.session_state.get("auto_progression_enabled", True),
+    key="auto_progression_enabled",
+    help="Lorsque cette option est active, l'application vous guide automatiquement vers la"
+    " prochaine étape dès qu'un résultat est prêt.",
+)
+if st.sidebar.button("🚀 Aller directement à la simulation d'impôt"):
+    navigate_to_page("Étape 2 : Simulation d'impôt")
+
 menu_pages = [
     "Étape 1 : Brut → Net",
     "Étape 2 : Simulation d'impôt",
