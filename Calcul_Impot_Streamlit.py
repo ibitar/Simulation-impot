@@ -397,6 +397,123 @@ def page_brut_net():
         )
     )
 
+    def format_euro_plain(value: float) -> str:
+        return f"{value:,.0f} €".replace(",", " ")
+
+    st.subheader("Parcours du salaire : du coût employeur au net")
+    st.caption(
+        "Visualisez, étape par étape, comment le coût total employeur se transforme"
+        " en net perçu après les principales retenues."
+    )
+
+    simulation_result = st.session_state.get("simulation")
+    net_apres_impot = None
+    impot_mensuel = None
+    net_transfere = st.session_state.get("net_a_payer_mensuel")
+    if simulation_result and net_transfere is not None:
+        if abs(net_transfere - res.net_a_payer) < 0.5:
+            impot_annuel = simulation_result.get("impot_final")
+            revenu_net_mensuel = simulation_result.get("revenu_net_mensuel")
+            if impot_annuel is not None and revenu_net_mensuel is not None:
+                impot_mensuel = impot_annuel / 12.0
+                net_apres_impot = max(revenu_net_mensuel, 0.0)
+
+    journey_labels = [
+        "Coût total employeur",
+        "Salaire brut",
+        "Net à payer",
+    ]
+    journey_values = [
+        res.cout_total_employeur,
+        res.brut_mensuel,
+        res.net_a_payer,
+    ]
+
+    deductions = [
+        ("Charges employeur", res.total_charges_employeur, 0, 1),
+        (
+            "Cotisations salarié (incl. CSG/CRDS)",
+            cotisations_salarie_totales,
+            1,
+            2,
+        ),
+    ]
+
+    if net_apres_impot is not None and impot_mensuel is not None:
+        journey_labels.append("Net après impôt")
+        journey_values.append(net_apres_impot)
+        deductions.append(("Impôt sur le revenu", impot_mensuel, 2, 3))
+
+    fig, ax = plt.subplots(figsize=(12, 5.5))
+    x_positions = np.arange(len(journey_labels))
+
+    line_color = "#1f4e79"
+    ax.plot(x_positions, journey_values, color=line_color, linewidth=3, zorder=2)
+
+    stage_colors = ["#1f4e79", "#2874a6", "#2e8b57", "#27ae60"]
+    stage_colors = stage_colors[: len(journey_labels)]
+
+    y_min = min(journey_values)
+    y_max = max(journey_values)
+    y_range = max(y_max - y_min, max(journey_values) * 0.1 if journey_values else 1)
+    if y_range == 0:
+        y_range = 1
+
+    for idx, (label, value, color) in enumerate(
+        zip(journey_labels, journey_values, stage_colors)
+    ):
+        ax.scatter(idx, value, color=color, s=120, zorder=3, edgecolor="white", linewidth=1.5)
+        ax.text(
+            idx,
+            value + y_range * 0.04,
+            format_euro(value),
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            fontweight="bold",
+            color=color,
+        )
+
+    for label, amount, start_idx, end_idx in deductions:
+        if amount <= 0:
+            continue
+        x_pos = (start_idx + end_idx) / 2
+        y_start = journey_values[start_idx]
+        y_end = journey_values[end_idx]
+        ax.annotate(
+            f"-{format_euro_plain(amount)}\n{label}",
+            xy=(x_pos, y_end),
+            xytext=(x_pos, y_start - y_range * 0.12),
+            ha="center",
+            va="top",
+            fontsize=10,
+            color="#c0392b",
+            arrowprops=dict(arrowstyle="->", color="#c0392b", linewidth=1.5),
+            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#c0392b", alpha=0.85),
+        )
+
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(journey_labels, rotation=10, ha="right", fontsize=11)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: format_euro_plain(v)))
+    ax.set_ylabel("Montant mensuel (€)")
+    ax.set_title(
+        "Voyage du salaire : de la charge employeur au net perçu",
+        pad=20,
+    )
+    ax.grid(axis="y", linestyle="--", alpha=0.3)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.set_xlim(-0.15, len(journey_labels) - 0.85)
+
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+
+    if net_apres_impot is None:
+        st.caption(
+            "💡 Transférez votre brut → net vers la simulation (Étape 2) pour"
+            " prolonger cette courbe jusqu'au net après impôt."
+        )
+
     resume_df = pd.DataFrame(
         [
             {
