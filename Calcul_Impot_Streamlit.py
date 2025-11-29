@@ -288,12 +288,18 @@ def page_brut_net():
     st.title("Brut → Net (cadre, 2025) + part employeur")
     st.caption(
         "Les montants affichés sont mensuels. Utilisez l'option *Annuel* pour convertir"
-        " automatiquement un salaire annuel brut."
+        " automatiquement un salaire annuel brut (12 mois par défaut, 13e mois possible)."
     )
 
     colA, colB = st.columns(2)
     with colA:
         period = st.selectbox("Période", ["Mensuel", "Annuel"], index=0)
+        last_period = st.session_state.get("brut_net_last_period")
+        just_switched_period = last_period is not None and last_period != period
+        st.session_state["brut_net_last_period"] = period
+        if just_switched_period:
+            # Évite la navigation automatique immédiatement après un simple changement de période
+            st.session_state["brut_net_skip_autoprogress_once"] = True
     with colB:
         brut_input = st.number_input(
             f"Salaire brut {period.lower()}",
@@ -301,6 +307,19 @@ def page_brut_net():
             value=6000.0,
             step=100.0,
         )
+
+    if period == "Annuel":
+        mois_versement = st.number_input(
+            "Nombre de mois de versement (13 si prime de 13e mois, etc.)",
+            min_value=12,
+            max_value=14,
+            value=int(st.session_state.get("brut_mois_versement", 12)),
+            step=1,
+            help="Répartit le salaire annuel sur 12, 13 ou 14 mois pour lisser le brut mensuel.",
+        )
+        st.session_state["brut_mois_versement"] = mois_versement
+    else:
+        mois_versement = 12
 
     st.subheader("Options")
     c1, c2, c3 = st.columns(3)
@@ -319,10 +338,10 @@ def page_brut_net():
     with c3:
         effectif_50plus = st.checkbox("Effectif ≥ 50 (FNAL 0,50%)", value=True)
         chomage_mai = st.checkbox(
-            "Taux chômage 4,00% (après 01/05/2025)", value=True
+        "Taux chômage 4,00% (après 01/05/2025)", value=True
         )
 
-    brut_mensuel = brut_input / 12.0 if period == "Annuel" else brut_input
+    brut_mensuel = brut_input / mois_versement if period == "Annuel" else brut_input
 
     res = calcul_brut_net_mensuel(
         brut_mensuel,
@@ -335,12 +354,12 @@ def page_brut_net():
     )
 
     st.session_state["brut_mensuel_calcule"] = res.brut_mensuel
-    st.session_state["brut_annuel_calcule"] = res.brut_mensuel * 12
+    st.session_state["brut_annuel_calcule"] = res.brut_mensuel * mois_versement
 
     net_imposable_mensuel = res.net_imposable
-    net_imposable_annuel = res.net_imposable * 12
+    net_imposable_annuel = res.net_imposable * mois_versement
     net_a_payer_mensuel = res.net_a_payer
-    net_a_payer_annuel = res.net_a_payer * 12
+    net_a_payer_annuel = res.net_a_payer * mois_versement
 
     brut_net_result = {
         "revenu_net_imposable_mensuel": net_imposable_mensuel,
@@ -348,6 +367,7 @@ def page_brut_net():
         "net_a_payer_mensuel": net_a_payer_mensuel,
         "net_a_payer_annuel": net_a_payer_annuel,
         "period": period,
+        "mois_versement": mois_versement,
     }
 
     previous_result = st.session_state.get("brut_net_result")
@@ -371,7 +391,8 @@ def page_brut_net():
                 st.session_state["revenu_net_source"] = "brut_net_stale"
             st.session_state["brut_net_applied_version"] = None
 
-        if st.session_state.get("auto_progression_enabled", False):
+        skip_autoprogress = st.session_state.pop("brut_net_skip_autoprogress_once", False)
+        if st.session_state.get("auto_progression_enabled", False) and not skip_autoprogress:
             autoprogress_version = st.session_state.get("brut_net_autoprogress_version")
             if autoprogress_version != new_version:
                 transfer_brut_net_to_simulation(
@@ -1584,4 +1605,3 @@ elif page == "Étape 3 : Visualisation":
     page_information()
 elif page == "Étape 4 : Capacité d'emprunt":
     page_credit()
-
